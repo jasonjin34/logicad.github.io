@@ -43,6 +43,30 @@
   <script src="static/js/bulma-carousel.min.js"></script>
   <script src="static/js/bulma-slider.min.js"></script>
   <script src="static/js/index.js"></script>
+  <!-- Include MathJax for LaTeX rendering -->
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script type="text/javascript" id="MathJax-script" async
+          src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+  </script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+    }
+    .section {
+      padding: 2rem 1rem;
+    }
+    .hero.is-light {
+      background-color: #f8f9fa;
+    }
+    .title {
+      font-weight: bold;
+      margin-bottom: 1rem;
+    }
+    .content {
+      font-size: 1rem;
+    }
+  </style>
 </head>
 <body>
 
@@ -141,7 +165,7 @@
       <div id="results-carousel">
        <div class="item">
         <!-- Your image here -->
-        <center></center>
+        <center>
           <img src="static/images/main_figure_v1.jpg" alt="MY ALT TEXT"/>
         </center>
         
@@ -194,6 +218,84 @@
 </section>
 <!-- End paper abstract -->
 
+<!-- Combined Method Section -->
+<section class="section hero is-light">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3">Methods</h2>
+        <div class="content has-text-justified">
+          <h3>Text Extraction</h3>
+          <p>
+            The LogicAD method is based on robust text extraction. The detailed steps of text extraction can be summarized as follows:
+          </p>
+          <ol>
+            <li>
+              Generate a set of regions \( \mathbf{w}_i \), where \( i \in [1, N] \) and \( N \) represents the total number of regions of interest (ROIs), using the function \( f_{\text{GDINO}} \) with feature prompts. Each region, along with the original image, is then processed by the function \( f_{\text{AVLM}} \), \( K = 3 \) times, yielding a collection of textual descriptions \( \mathcal{T} = \{ t_1, t_2, t_3 \} \).
+            </li>
+            <li>
+              Construct the text embedding space \( \mathcal{M} \) by applying the text embedding model, text-embedding-3-large from OpenAI, \( f_{\text{emb}} \), to \( \mathcal{T} \), resulting in:
+              \[
+              \mathcal{M} = f_{\text{emb}}(\mathcal{T}) = \{ \mathbf{e}_i \}_{i=1}^k
+              \]
+              where \( \mathbf{e}_i \) is the embedding of the extracted text. Subsequently, these text embeddings are fed into an outlier detection model, specifically the Local Outlier Factor (LOF) function \( f_{\text{LOF}} \), to generate the filtered text embedding space, denoted as \( \mathcal{T}_{\text{filter}} \). Finally, we randomly select the corresponding text from the filtered embedding space \( \mathcal{T}_{\text{filter}} \).
+            </li>
+          </ol>
+          <div class="image-container">
+            <img src="static/images/guide_cot-crop.jpg" alt="Anomaly Detection Logic">
+            <div class="image-caption">Guided CoT</div>
+          </div>
+          
+          <div class="image-container">
+            <img src="static/images/text_feature_extraction-crop.jpg" alt="Anomaly Detection Logic">
+            <div class="image-caption">Sample of text feature extraction pipeline</div>
+          </div>
+
+
+          <h3>Anomaly Text Detection</h3>
+          <p>
+            After the robust text extraction, we propose the following two directions for anomaly text detection:
+          </p>
+          <h4>1. Format Embedding</h4>
+          <p>
+            After extracting the text features, we use an LLM to summarize the text in <i>JSON</i> format. Both the normal/reference image \(X_{n}\) and the query image \(X_{q}\) are then fed into the embedding function \(f_{\text{emb}}\) to generate the respective embedding features \(\mathbf{\hat{e}}_n\) and \(\mathbf{\hat{e}}_q\). We then calculate the anomaly score based on the cosine similarity between these normalized embeddings as follows:
+          </p>
+          \[
+          \text{ascore} = 1 - \langle \mathbf{\hat{e}}_n, \mathbf{\hat{e}}_q \rangle
+          \]
+
+          <h4>2. Logic Reasoner</h4>
+          <p>
+            Let \(\Gamma = \Sigma_{\text{norm}} \cup \Sigma_{\text{na}} \cup \Sigma_{\text{fa}} \cup \Sigma_{\text{dca}}\) be the union of all hypotheses. The anomaly detection (\(\text{AD}\)) task is then converted to a theorem-proving task:
+          </p>
+          <ul>
+            <li>If \(\Gamma \models \neg \Sigma_0\), then we label the image as abnormal.</li>
+            <li>If \(\Gamma \not\models \neg \Sigma_0\), then we label the image as normal.</li>
+          </ul>
+          <p>
+            We use Prover9 for theorem proving. Here, \(\Gamma \models \neg \Sigma_0\) means \(\Gamma\) logically entails \(\neg \Sigma_0\), i.e., every logical model satisfying \(\Gamma\) will also satisfy the negation of \(\Sigma_0\). Since \(\Sigma_0\) is the formal description of the image, it shows that the image description contradicts the normal cases and hence the image is abnormal.
+          </p>
+          <p>
+            To identify the actual anomaly, we look for a minimal subset of \(\Sigma_0\) which causes the anomaly, i.e., for \(\Sigma_a \subseteq \Sigma_0\), if \(\Gamma \models \neg \Sigma_a\) and for any \(\Sigma' \subsetneq \Sigma_a\), we have \(\Gamma \not\models \neg \Sigma'\), then \(\Sigma_a\) forms an explanation. Consider \(\Sigma_0\) and \(\Gamma\) defined as above with all the mentioned formulae:
+          </p>
+          <p>
+            \[
+            \Gamma \models \neg \Sigma_0 \quad \text{since both an apple and a nectarine are on the left.}
+            \]
+            Then \(\Sigma_a = \{ \text{left}(\text{nectarine}, 1), \text{left}(\text{apple}, 1) \}\) is a formal explanation of the anomaly since \(\Sigma_a \subseteq \Sigma_0\), and
+          </p>
+          \[
+          \begin{align*}
+              & \Gamma \models \neg (\text{left}(\text{nectarine}, 1) \land \text{left}(\text{apple}, 1)) \\
+              & \Gamma \not\models \neg \text{left}(\text{nectarine}, 1) \\
+              & \Gamma \not\models \neg \text{left}(\text{apple}, 1)
+          \end{align*}
+          \]
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
 
 <!--BibTex citation -->
   <section class="section" id="BibTeX">
